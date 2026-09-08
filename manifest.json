@@ -1,0 +1,13 @@
+{
+  "name": "Akshardham Associates — Expense & Cash Register",
+  "short_name": "AA Expenses",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f5f7",
+  "theme_color": "#EA5B22",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" }
+  ]
+}

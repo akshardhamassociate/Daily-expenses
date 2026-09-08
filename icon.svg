@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="g" x1="150" y1="0" x2="362" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#EA5B22"/><stop offset="1" stop-color="#F7B733"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#ffffff"/>
+  <!-- building skyline, orange->gold, inside the maskable safe zone -->
+  <g fill="url(#g)">
+    <rect x="158" y="205" width="42" height="140" rx="6"/>
+    <rect x="208" y="150" width="42" height="195" rx="6"/>
+    <rect x="258" y="178" width="42" height="167" rx="6"/>
+    <rect x="308" y="228" width="40" height="117" rx="6"/>
+  </g>
+  <!-- windows on the tallest tower -->
+  <g fill="#ffffff" opacity="0.9">
+    <rect x="216" y="174" width="10" height="10" rx="2"/><rect x="232" y="174" width="10" height="10" rx="2"/>
+    <rect x="216" y="196" width="10" height="10" rx="2"/><rect x="232" y="196" width="10" height="10" rx="2"/>
+    <rect x="216" y="218" width="10" height="10" rx="2"/><rect x="232" y="218" width="10" height="10" rx="2"/>
+  </g>
+  <!-- house roof + door, echoing the Akshardham mark -->
+  <path d="M130 408 L256 350 L382 408" fill="none" stroke="url(#g)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="243" y="376" width="26" height="26" rx="3" fill="url(#g)"/>
+</svg>
