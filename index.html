@@ -100,8 +100,9 @@ tr:last-child td{border-bottom:0}
   </header>
 
   <div class="seg oseg">
-    <button type="button" id="oKota" class="on" onclick="setOffice('kota')">🏢 Kota Office</button>
-    <button type="button" id="oJhal" onclick="setOffice('jhalawar')">🏭 Jhalawar Office</button>
+    <button type="button" id="oKota" class="on" onclick="setOffice('kota')">🏢 Kota</button>
+    <button type="button" id="oJhal" onclick="setOffice('jhalawar')">🏭 Jhalawar</button>
+    <button type="button" id="oSal" onclick="setOffice('salary')">💰 Salary</button>
   </div>
 
   <div class="balance">
@@ -210,7 +211,7 @@ const CAT_COLORS = {
   'Money Transfer':['#ebfbee','#2f9e44'], Stationery:['#eef3ff','#3b5bdb'],
   Housekeeping:['#e9f8ef','#1f9d55'], Repairing:['#fff9db','#a37500'],
   Reimbursement:['#f3edff','#7048e8'], Others:['#eef1f4','#495057'],
-  'Cash In':['#e6fcf5','#0ca678']
+  'Cash In':['#e6fcf5','#0ca678'], 'Salary Expences':['#e6fcf5','#0ca678'], 'Salary Paid':['#fff0f6','#c2255c']
 };
 const rupee = n => '₹' + (Number(n)||0).toLocaleString('en-IN');
 const KEY = 'akshardham_expenses';
@@ -245,34 +246,53 @@ function setOffice(o){
   office = o;
   document.getElementById('oKota').classList.toggle('on', o==='kota');
   document.getElementById('oJhal').classList.toggle('on', o==='jhalawar');
+  document.getElementById('oSal').classList.toggle('on', o==='salary');
+  updateFields();
   render();
+}
+
+/* Reconfigure the form for the selected office + type (Salary hides category/employee/source, relabels). */
+function updateFields(){
+  const sal = office==='salary';
+  document.getElementById('tExp').textContent  = sal ? '− Salary Paid' : '− Expense (Kharcha)';
+  document.getElementById('tCash').textContent = sal ? '+ Salary Received' : '+ Cash In (Paisa Aaya)';
+  document.querySelectorAll('.expense-only').forEach(el=> el.style.display = (type==='expense' && !sal) ? '' : 'none');
+  document.getElementById('category').required = (type==='expense' && !sal);
+  const lbl = document.getElementById('itemLbl'), item = document.getElementById('item');
+  if(sal){
+    lbl.innerHTML = 'Name / Particular <span class="req">*</span>'; item.placeholder = 'e.g. Rupesh ji, Krishan Sir';
+    if(item.value === 'From Krishan Sir') item.value = '';
+  } else if(type==='cashin'){
+    lbl.innerHTML = 'Received From / Note <span class="req">*</span>'; item.placeholder = 'e.g. From Krishan Sir';
+    if(!item.value) item.value = 'From Krishan Sir';
+  } else {
+    lbl.innerHTML = 'Item / Particulars <span class="req">*</span>'; item.placeholder = 'e.g. Milk, Petrol, Recharge';
+  }
+  document.getElementById('cashNote').hidden = !(type==='cashin' && !sal);
 }
 
 function setType(t){
   type = t;
   document.getElementById('tExp').classList.toggle('on', t==='expense');
   document.getElementById('tCash').classList.toggle('on', t==='cashin');
-  document.querySelectorAll('.expense-only').forEach(el=>el.style.display = t==='expense'?'':'none');
-  document.getElementById('category').required = t==='expense';
-  document.getElementById('itemLbl').innerHTML = t==='cashin'
-     ? 'Received From / Note <span class="req">*</span>' : 'Item / Particulars <span class="req">*</span>';
-  document.getElementById('item').placeholder = t==='cashin' ? 'e.g. From Krishan Sir' : 'e.g. Milk, Petrol, Recharge';
-  if(t==='cashin' && !document.getElementById('item').value) document.getElementById('item').value = 'From Krishan Sir';
-  document.getElementById('cashNote').hidden = t!=='cashin';
+  updateFields();
 }
 
 function save(e){
   e.preventDefault();
+  const sal = office==='salary';
   const en = {
     id: Date.now(),
     date: document.getElementById('date').value,
     type,
-    office: type==='cashin' ? 'kota' : office,   // cash is shared, always added from Kota
-    category: type==='expense' ? document.getElementById('category').value : 'Cash In',
+    // Salary stays in the Salary tab; office cash-in is always added from Kota. All share one balance.
+    office: sal ? 'salary' : (type==='cashin' ? 'kota' : office),
+    category: sal ? (type==='cashin' ? 'Salary Expences' : 'Salary Paid')
+                  : (type==='expense' ? document.getElementById('category').value : 'Cash In'),
     item: document.getElementById('item').value.trim(),
     amount: Math.round(Number(document.getElementById('amount').value)||0),
-    employee: type==='expense' ? document.getElementById('employee').value.trim() : '',
-    source: type==='expense' ? document.getElementById('source').value.trim() : '',
+    employee: (type==='expense' && !sal) ? document.getElementById('employee').value.trim() : '',
+    source: (type==='expense' && !sal) ? document.getElementById('source').value.trim() : '',
     remark: document.getElementById('remark').value.trim()
   };
   if(!en.item || en.amount<=0){ return false; }
