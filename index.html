@@ -278,8 +278,10 @@ function setType(t){
   updateFields();
 }
 
+let saving = false;   // guard against double-submit (double-tap making 2 rows)
 function save(e){
   e.preventDefault();
+  if(saving) return false;
   const sal = office==='salary';
   const en = {
     id: Date.now(),
@@ -296,11 +298,13 @@ function save(e){
     remark: document.getElementById('remark').value.trim()
   };
   if(!en.item || en.amount<=0){ return false; }
+  saving = true;
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
   entries.push(en);
   if(sheetBalance !== null) sheetBalance += (en.type==='cashin' ? en.amount : -en.amount);   // optimistic
   persist();
-  syncToSheet(en);
-  setTimeout(loadFromSheet, 2500);   // pull the real shared data back once the Sheet has saved it
+  syncToSheet(en);   // reads the real response; re-enables the button
   document.getElementById('f').reset();
   document.getElementById('date').valueAsDate = new Date();
   setType(type);
@@ -360,7 +364,8 @@ function render(){
   rows.innerHTML = sorted.map(e=>{
     const [bg,fg] = CAT_COLORS[e.category] || CAT_COLORS.Others;
     const meta = [e.employee && ('👤 '+e.employee), e.source, e.remark].filter(Boolean).join(' · ');
-    const d = e.date ? new Date(e.date+'T00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : '';
+    const dObj = e.date ? new Date(e.date+'T00:00') : null;
+    const d = (dObj && !isNaN(dObj)) ? dObj.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : (e.date||'');
     return `<tr>
       <td><b>${d}</b></td>
       <td>${esc(e.item)||'—'}${meta?`<div class="sub">${esc(meta)}</div>`:''}</td>
@@ -373,12 +378,19 @@ function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt
 
 function syncToSheet(en){
   const h = document.getElementById('syncHint');
-  if(!SCRIPT_URL){ h.innerHTML = 'Saved on this device. <b>Connect a Google Sheet</b> to share with the accountant.'; return; }
+  const btn = document.getElementById('saveBtn');
+  const done = ()=>{ saving=false; if(btn){ btn.disabled=false; btn.textContent='Save Entry'; } };
+  if(!SCRIPT_URL){ h.innerHTML = 'Saved on this device. <b>Connect a Google Sheet</b>.'; done(); return; }
   h.textContent = 'Saving to Google Sheet…';
-  /* no-cors + text/plain avoids CORS preflight; write succeeds, response is opaque. */
-  fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(en)})
-    .then(()=>{ h.innerHTML='✓ Saved to Google Sheet'; })
-    .catch(()=>{ h.innerHTML='⚠ Saved on device — Sheet sync failed (will show in list). Check internet.'; });
+  /* Read the real response (text/plain = no preflight; Apps Script sends CORS headers) so failures aren't silent. */
+  fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(en)})
+    .then(r=>r.json())
+    .then(d=>{
+      if(d && d.ok){ sheetBalance = Number(d.balance); h.textContent='✓ Saved · Cash in Hand ₹'+sheetBalance.toLocaleString('en-IN'); render(); }
+      else { h.innerHTML='⚠ Sheet ne save nahi kiya: '+esc((d&&d.error)||'unknown')+'. Dobara try karo.'; }
+      done();
+    })
+    .catch(()=>{ h.innerHTML='⚠ Internet slow/off — entry device par saved, sheet mein nahi gayi. Net aane par dobara Save karo.'; done(); });
 }
 
 /* Excel: exports the selected office + month entries (or All Months). Balance is shared, so the Sheet is the source of truth. */
