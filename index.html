@@ -227,7 +227,8 @@ function loadFromSheet(){
   if(!SCRIPT_URL) return;
   const h = document.getElementById('syncHint');
   if(h && !h.textContent) h.textContent = 'Loading from Google Sheet…';
-  fetch(SCRIPT_URL, {method:'GET'})
+  // cache-bust (?t=) + no-store so we NEVER get a stale cached copy from the service worker/browser
+  fetch(SCRIPT_URL + '?t=' + Date.now(), {method:'GET', cache:'no-store'})
     .then(r => r.json())
     .then(d => {
       if(!d || !d.ok) throw new Error(d && d.error || 'bad response');
@@ -427,8 +428,11 @@ setType('expense');
 render();
 loadFromSheet();   // show the shared Sheet data (same for everyone) on open
 
-/* PWA: register service worker + browser install button (works when hosted on https). */
+/* PWA: register service worker + browser install button (works when hosted on https).
+   Auto-heal: when a new version's service worker takes over, reload once so no stale copy lingers. */
 if('serviceWorker' in navigator){
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(reloaded) return; reloaded = true; location.reload(); });
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 let deferredPrompt;
