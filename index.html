@@ -180,13 +180,14 @@ tr:last-child td{border-bottom:0}
     <div class="tbar">
       <h2 style="margin:0"><span class="dot"></span>Entries</h2>
       <div style="display:flex;gap:8px">
+        <button type="button" class="btn" onclick="loadFromSheet()" title="Refresh from Google Sheet">🔄 Refresh</button>
         <select id="monthFilter" class="btn" onchange="render()"></select>
         <button type="button" class="btn" onclick="exportCSV()">⬇ Export Excel</button>
       </div>
     </div>
     <div class="tscroll">
       <table>
-        <thead><tr><th>Date</th><th>Details</th><th>Category</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Details</th><th>Category</th><th style="text-align:right">Amount</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -213,11 +214,32 @@ const CAT_COLORS = {
 };
 const rupee = n => '₹' + (Number(n)||0).toLocaleString('en-IN');
 const KEY = 'akshardham_expenses';
-let entries = JSON.parse(localStorage.getItem(KEY) || '[]');
+let entries = JSON.parse(localStorage.getItem(KEY) || '[]');   // cache of the shared Sheet data (offline fallback)
+let sheetBalance = null;   // authoritative shared balance from the Sheet (null until first load)
 let type = 'expense';
 let office = 'kota';   // which office tab this view + new entry belongs to
 
 document.getElementById('date').valueAsDate = new Date();
+
+/* Pull the SHARED data from the Sheet so every device shows the same entries + balance. */
+function loadFromSheet(){
+  if(!SCRIPT_URL) return;
+  const h = document.getElementById('syncHint');
+  if(h && !h.textContent) h.textContent = 'Loading from Google Sheet…';
+  fetch(SCRIPT_URL, {method:'GET'})
+    .then(r => r.json())
+    .then(d => {
+      if(!d || !d.ok) throw new Error(d && d.error || 'bad response');
+      sheetBalance = Number(d.balance) || 0;
+      entries = (d.entries || []).map((e,i) => ({ id:'s'+i, office:e.office, date:e.date, type:e.type,
+        category:e.category || (e.type==='cashin'?'Cash In':'Others'), item:e.item, amount:e.amount,
+        employee:e.employee||'', source:'', remark:e.remark||'' }));
+      localStorage.setItem(KEY, JSON.stringify(entries));
+      if(h) h.textContent = '';
+      render();
+    })
+    .catch(()=>{ if(h) h.textContent = ''; });   // stay on cached data if offline
+}
 
 function setOffice(o){
   office = o;
@@ -255,19 +277,16 @@ function save(e){
   };
   if(!en.item || en.amount<=0){ return false; }
   entries.push(en);
+  if(sheetBalance !== null) sheetBalance += (en.type==='cashin' ? en.amount : -en.amount);   // optimistic
   persist();
   syncToSheet(en);
+  setTimeout(loadFromSheet, 2500);   // pull the real shared data back once the Sheet has saved it
   document.getElementById('f').reset();
   document.getElementById('date').valueAsDate = new Date();
   setType(type);
   return false;
 }
 
-function del(id){
-  if(!confirm('Delete this entry? (removes from this list only, not from the Sheet)')) return;
-  entries = entries.filter(x=>x.id!==id);
-  persist();
-}
 
 /* balance = money in − money out. ponytail: this-device balance; the Sheet keeps its own via Code.gs. */
 function persist(){
@@ -303,7 +322,8 @@ function render(){
   const cashIn = sum(entries.filter(e=>e.type==='cashin'));
   const kotaOut = sum(entries.filter(e=>isExp(e) && (e.office||'kota')==='kota'));
   const jhalOut = sum(entries.filter(e=>isExp(e) && e.office==='jhalawar'));
-  document.getElementById('bal').textContent = (OPENING_CASH + cashIn - kotaOut - jhalOut).toLocaleString('en-IN');
+  const cash = (sheetBalance !== null) ? sheetBalance : (OPENING_CASH + cashIn - kotaOut - jhalOut);
+  document.getElementById('bal').textContent = cash.toLocaleString('en-IN');
   document.getElementById('balLbl').textContent = 'Cash in Hand · Both Offices';
   document.getElementById('sRecv').textContent = rupee(cashIn);
   document.getElementById('sKota').textContent = rupee(kotaOut);
@@ -315,8 +335,8 @@ function render(){
   document.getElementById('sCount').textContent = list.length;
 
   const rows = document.getElementById('rows');
-  if(!list.length){ rows.innerHTML = '<tr><td colspan="5" class="empty">No entries for this office/month yet.</td></tr>'; return; }
-  const sorted = [...list].sort((a,b)=> (b.date||'').localeCompare(a.date||'') || b.id-a.id);
+  if(!list.length){ rows.innerHTML = '<tr><td colspan="4" class="empty">No entries for this office/month yet.</td></tr>'; return; }
+  const sorted = [...list].sort((a,b)=> (b.date||'').localeCompare(a.date||'') || String(b.id).localeCompare(String(a.id)));
   rows.innerHTML = sorted.map(e=>{
     const [bg,fg] = CAT_COLORS[e.category] || CAT_COLORS.Others;
     const meta = [e.employee && ('👤 '+e.employee), e.source, e.remark].filter(Boolean).join(' · ');
@@ -324,9 +344,8 @@ function render(){
     return `<tr>
       <td><b>${d}</b></td>
       <td>${esc(e.item)||'—'}${meta?`<div class="sub">${esc(meta)}</div>`:''}</td>
-      <td><span class="chip" style="background:${bg};color:${fg}">${e.category}</span></td>
+      <td><span class="chip" style="background:${bg};color:${fg}">${esc(e.category)}</span></td>
       <td style="text-align:right" class="${e.type==='cashin'?'amt-cash':'amt-exp'}">${e.type==='cashin'?'+':'−'}${rupee(e.amount)}</td>
-      <td style="text-align:right"><button class="del" onclick="del(${e.id})" title="Delete">✕</button></td>
     </tr>`;
   }).join('');
 }
@@ -374,6 +393,7 @@ function exportCSV(){
 
 setType('expense');
 render();
+loadFromSheet();   // show the shared Sheet data (same for everyone) on open
 
 /* PWA: register service worker + browser install button (works when hosted on https). */
 if('serviceWorker' in navigator){
