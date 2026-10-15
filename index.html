@@ -387,7 +387,12 @@ function syncToSheet(en){
   fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(en)})
     .then(r=>r.json())
     .then(d=>{
-      if(d && d.ok){ sheetBalance = Number(d.balance); h.textContent='✓ Saved · Cash in Hand ₹'+sheetBalance.toLocaleString('en-IN'); render(); }
+      if(d && d.ok){
+        sheetBalance = Number(d.balance);
+        if(d.duplicate){ entries = entries.filter(x=>x.id!==en.id); persist(); h.textContent='↩ Ye entry already saved thi (duplicate skip)'; }
+        else { h.textContent='✓ Saved · Cash in Hand ₹'+sheetBalance.toLocaleString('en-IN'); }
+        render();
+      }
       else { h.innerHTML='⚠ Sheet ne save nahi kiya: '+esc((d&&d.error)||'unknown')+'. Dobara try karo.'; }
       done();
     })
